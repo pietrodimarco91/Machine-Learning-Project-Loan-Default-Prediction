@@ -15,7 +15,6 @@ class ThresholdRandomForest(RandomForestClassifier):
 		self.threshold = threshold
 
 	def predict(self, X):
-		print('hey')
 		return [1 if len(t) > 1 and t[1] >= self.threshold else 0 for t in self.predict_proba(X)]
 
 class ThresholdAdaBoost(AdaBoostClassifier):
@@ -66,10 +65,15 @@ class ThresholdGridCV():
 		self._scores = []
 		self._avg_scores = []
 
-		if isinstance(X, pandas.core.frame.DataFrame):
+		if isinstance(X, pandas.core.series.Series) or isinstance(X, pandas.core.frame.DataFrame):
 			if self._verbose >= 2:
-				print("Converting data in numpy array")
+				print("Converting X in numpy array")
 			X = X.values
+
+		if isinstance(y, pandas.core.series.Series) or isinstance(y, pandas.core.frame.DataFrame):
+			if self._verbose >= 2:
+				print("Converting y in numpy array")
+			y = y.values
 
 		for params in list(ParameterGrid(self._params)):
 			if self._verbose >=1:
