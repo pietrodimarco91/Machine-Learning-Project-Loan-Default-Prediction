@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.metrics import accuracy_score, f1_score
@@ -42,7 +43,7 @@ class ThresholdSVC(SVC):
 		return [1 if len(t) > 1 and t[1] >= self.threshold else 0 for t in self.predict_proba(X)]
 
 class ThresholdGridCV():
-	def __init__(self, model, params, cv=10, metric = accuracy_score, verbose = 0, random_state = 42):
+	def __init__(self, model, params, cv=10, metric = f1_score, verbose = 2, random_state = 42):
 		self._model = model
 		self._params = params
 		if type(cv) == int:
@@ -64,6 +65,7 @@ class ThresholdGridCV():
 		self._models = []
 		self._scores = []
 		self._avg_scores = []
+		self._thresholds = []
 
 		if isinstance(X, pandas.core.series.Series) or isinstance(X, pandas.core.frame.DataFrame):
 			if self._verbose >= 2:
@@ -80,6 +82,7 @@ class ThresholdGridCV():
 				print("Evaluating model with parameters: {0}".format(params))
 
 			tmp_scores = []
+			tmp_thresholds = []
 			model = self._model(**params)
 
 			fold = 1
@@ -92,12 +95,17 @@ class ThresholdGridCV():
 					fold += 1
 
 				model = model.fit(X_train, y_train)
-				score = self._metric(model.predict(X_test), y_test)
+
+				best_threshold = get_best_threshold(model, X_train, y_train)[0]
+				predictions = (get_probabilities(model, X_test) >= best_threshold)*1
+
+				score = self._metric(predictions, y_test)
 
 				if self._verbose >= 2:
 					print("\t{0}".format(score))
 
 				tmp_scores.append(score)
+				tmp_thresholds.append(best_threshold)
 
 			model = model.fit(X, y)
 
@@ -105,6 +113,7 @@ class ThresholdGridCV():
 			self._models.append(model)
 			self._scores.append(tmp_scores)
 			self._avg_scores.append(sum(tmp_scores) / len(tmp_scores))
+			self._thresholds.append(tmp_thresholds)
 
 		if self._verbose >= 1:
 			print("Evaluation finished")
@@ -145,13 +154,17 @@ def plot_roc_curve(model, X, y):
 
 	plt.show()
 
-def get_best_threshold(model, X, y, metric = f1_score):
+def get_best_threshold(model, X, y, metric = f1_score, only_below_50 = True):
 	probabilities = get_probabilities(model, X)
 
 	fpr, tpr, threshold = roc_curve(y, probabilities)
+
+	if only_below_50:
+		threshold = threshold[threshold < 0.5]
 	
 	def get_score(threshold, probabilities, y_true):
-		predicts = [1 if p >= threshold else 0 for p in probabilities]
+		predicts = 1*(probabilities >= threshold)
+		#predicts = [1 if p >= threshold else 0 for p in probabilities]
 		return metric(predicts, y_true)
 
 	scores = [get_score(t, probabilities, y) for t in threshold]
