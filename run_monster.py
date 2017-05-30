@@ -13,7 +13,7 @@ params_rf = {
 	'min_samples_leaf' : [4, 5, 6],
 	'min_samples_split' : [13, 15, 19],
 	'n_jobs' : [-1],
-	'random_seed' : [RANDOM_SEED]
+	'random_state' : [RANDOM_SEED]
 }
 
 params_xgb = {
@@ -38,8 +38,8 @@ params_mlp = {
 
 
 train = pd.read_csv('data/train_all_features.csv')
-X = train.drop(['CUST_COD', 'DEFAULT_PAYMENT_JAN'])
-y = train['DEFAULT_PAYMENT_JAN']
+X = train.drop(['CUST_COD', 'DEFAULT PAYMENT JAN'], axis=1)
+y = train['DEFAULT PAYMENT JAN']
 
 
 models = [RandomForestClassifier, XGBClassifier, AdaBoostClassifier, MLPClassifier]
