@@ -2,8 +2,9 @@ from __future__ import print_function
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.metrics import accuracy_score, f1_score
-from sklearn.model_selection import KFold, ParameterGrid
+from sklearn.model_selection import KFold, ParameterGrid, StratifiedKFold
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.base import clone
 from sklearn.svm import SVC
 import sys
 import pandas
@@ -48,8 +49,8 @@ class ThresholdGridCV():
 		self._model = model
 		self._params = params
 		if type(cv) == int:
-			self._cv = KFold(n_splits=cv, shuffle=True, random_state = random_state)
-		elif type(cv) == KFold:
+			self._cv = StratifiedKFold(n_splits=cv, shuffle=True, random_state = random_state)
+		elif type(cv) == KFold or type(cv) == StratifiedKFold:
 			self._cv = cv
 		else:
 			raise ValueError("cv must be an integer or a KFold object")
@@ -195,9 +196,33 @@ def get_best_threshold(model, X, y, metric = f1_score, only_below_50 = True):
 	#return threshold[max_index], scores[max_index]
 	return threshold[max_index], scores[max_index]
 
+def optimize_for_threshold(model, X, y, cv=10, random_state = 42, verbose=1):
+	model_copy = clone(model) # Make a copy of the model
 
+	kfolds = StratifiedKFold(n_splits=cv, random_state=random_state, shuffle=True)
+	try:
+		X = X.values
+		y = y.values
+	except:
+		pass
 
+	thrs = []
+	scores = []
+	i = 1
+	for tr_idx, tst_idx in kfolds.split(X, y):
+		X_tr, y_tr = X[tr_idx], y[tr_idx]
+		X_tst, y_tst = X[tst_idx], y[tst_idx]
 
+		m = model_copy.fit(X_tr, y_tr)
+		thr,score = get_best_threshold(m, X_tst, y_tst)
+		if verbose >= 1:
+		    print("Fold #{0} found thr: {1} and score: {2}".format(i, thr, score))
+		    i+=1
+
+		thrs.append(thr)
+		scores.append(score)
+
+	return thrs, scores
 
 
 

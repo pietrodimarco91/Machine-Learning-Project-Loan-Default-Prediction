@@ -33,7 +33,7 @@ class Monster():
 			y = y.values
 
 		if test_holdout:
-			X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state = self._random_state)
+			X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state = self._random_state, stratify=y)
 			print('Created test holdout. % positive class in test holdout = {0}'.format(sum(y_test)/len(y_test)))
 		else:
 			X_train, y_train = X, y
