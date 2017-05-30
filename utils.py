@@ -5,6 +5,7 @@ from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import KFold, ParameterGrid
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
+import sys
 import pandas
 
 import matplotlib.pyplot as plt
@@ -66,6 +67,7 @@ class ThresholdGridCV():
 		self._scores = []
 		self._avg_scores = []
 		self._thresholds = []
+		self._scores_train = []
 
 		if isinstance(X, pandas.core.series.Series) or isinstance(X, pandas.core.frame.DataFrame):
 			if self._verbose >= 2:
@@ -82,6 +84,7 @@ class ThresholdGridCV():
 				print("Evaluating model with parameters: {0}".format(params))
 
 			tmp_scores = []
+			tmp_scores_train = []
 			tmp_thresholds = []
 			model = self._model(**params)
 
@@ -96,28 +99,31 @@ class ThresholdGridCV():
 
 				model = model.fit(X_train, y_train)
 
-				best_threshold = get_best_threshold(model, X_train, y_train)[0]
+				best_threshold, best_f1_train = get_best_threshold(model, X_train, y_train)
 				predictions = (get_probabilities(model, X_test) >= best_threshold)*1
 
 				score = self._metric(predictions, y_test)
 
 				if self._verbose >= 2:
 					print("\t{0}".format(score))
+					sys.stdout.flush()
 
 				tmp_scores.append(score)
 				tmp_thresholds.append(best_threshold)
+				tmp_scores_train.append(best_f1_train)
 
 			model = model.fit(X, y)
-
 
 			self._models.append(model)
 			self._scores.append(tmp_scores)
 			self._avg_scores.append(sum(tmp_scores) / len(tmp_scores))
 			self._thresholds.append(tmp_thresholds)
+			self._scores_train.append(tmp_scores_train)
 
 		if self._verbose >= 1:
 			print("Evaluation finished")
 			print("Average score values: {0}".format(self._avg_scores))
+			sys.stdout.flush()
 
 
 	def best_model(self):
@@ -126,6 +132,17 @@ class ThresholdGridCV():
 
 		max_index = self._avg_scores.index(max(self._avg_scores))
 		return self._models[max_index]
+
+	def get_best(self):
+		"""
+		Returns a tuple (model, thresholds, train_scores, val_scores)
+		"""
+		if len(self._models) == 0 or len(self._scores) == 0:
+			raise Exception("Not fitted! Call fit before")
+
+		max_index = self._avg_scores.index(max(self._avg_scores))
+
+		return (self._models[max_index], self._thresholds[max_index], self._scores_train[max_index], self._scores[max_index])
 
 	def best_score(self):
 		if len(self._models) == 0 or len(self._scores) == 0:
@@ -138,6 +155,11 @@ def get_probabilities(model, X):
 	probabilities = model.predict_proba(X)
 
 	return np.array([t[1] if len(t) >= 1 else 0.0 for t in probabilities])
+
+def predict_with_threshold(model, X, threshold):
+	probabs = get_probabilities(model, X)
+
+	return 1 * (probabs >= threshold)
 
 def plot_roc_curve(model, X, y):
 	probabilities = get_probabilities(model, X)
@@ -170,10 +192,8 @@ def get_best_threshold(model, X, y, metric = f1_score, only_below_50 = True):
 	scores = [get_score(t, probabilities, y) for t in threshold]
 	max_index = scores.index(max(scores))
 
+	#return threshold[max_index], scores[max_index]
 	return threshold[max_index], scores[max_index]
-
-
-
 
 
 
