@@ -63,7 +63,7 @@ class ThresholdGridCV():
 		self._avg_scores = []
 
 
-	def fit(self, X, y):
+	def fit(self, X, y, optimize=False):
 		self._models = []
 		self._scores = []
 		self._avg_scores = []
@@ -90,7 +90,7 @@ class ThresholdGridCV():
 			model = self._model(**params)
 
 			fold = 1
-			for tr_index, tst_index in self._cv.split(X):
+			for tr_index, tst_index in self._cv.split(X, y):
 				X_train, X_test = X[tr_index], X[tst_index]
 				y_train, y_test = y[tr_index], y[tst_index]
 				
@@ -100,7 +100,11 @@ class ThresholdGridCV():
 
 				model = model.fit(X_train, y_train)
 
-				best_threshold, best_f1_train = get_best_threshold(model, X_train, y_train)
+				if optimize:
+					best_threshold, best_f1_train = optimize_for_threshold(model, X_train, y_train)
+				else:
+					best_threshold, best_f1_train = get_best_threshold(model, X_train, y_train)
+					
 				predictions = (get_probabilities(model, X_test) >= best_threshold)*1
 
 				score = self._metric(predictions, y_test)
@@ -222,7 +226,7 @@ def optimize_for_threshold(model, X, y, cv=10, random_state = 42, verbose=1):
 		thrs.append(thr)
 		scores.append(score)
 
-	return thrs, scores
+	return np.mean(thrs), np.mean(scores)
 
 
 

@@ -19,7 +19,7 @@ class Monster():
 		self._classifiers.append(model)
 		self._params.append(params)
 
-	def fit(self, X, y, cv=10, verbose=2, metric=f1_score, test_holdout = True):
+	def fit(self, X, y, cv=10, verbose=2, metric=f1_score, test_holdout = True, optimize=False):
 		self._best_models_in_cv = []
 
 		if isinstance(X, pandas.core.series.Series) or isinstance(X, pandas.core.frame.DataFrame):
@@ -45,7 +45,7 @@ class Monster():
 			if verbose >= 1:
 				print('\n\n========== Starting grid search for {0} =========='.format(model))
 
-			grid.fit(X_train, y_train)
+			grid.fit(X_train, y_train, optimize=optimize)
 
 			best_model, thresholds, tr_scores, val_scores = grid.get_best()
 			if verbose >= 1:
