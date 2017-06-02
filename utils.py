@@ -1,5 +1,6 @@
 from __future__ import print_function
 import numpy as np
+import sklearn
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import KFold, ParameterGrid, StratifiedKFold
@@ -104,7 +105,7 @@ class ThresholdGridCV():
 					best_threshold, best_f1_train = optimize_for_threshold(model, X_train, y_train)
 				else:
 					best_threshold, best_f1_train = get_best_threshold(model, X_train, y_train)
-					
+
 				predictions = (get_probabilities(model, X_test) >= best_threshold)*1
 
 				score = self._metric(predictions, y_test)
@@ -116,6 +117,9 @@ class ThresholdGridCV():
 				tmp_scores.append(score)
 				tmp_thresholds.append(best_threshold)
 				tmp_scores_train.append(best_f1_train)
+			
+			if self._verbose >= 2:
+				print('Average score: {0}     Average threshold: {1}'.format(np.mean(tmp_scores), np.mean(tmp_thresholds)))
 
 			model = model.fit(X, y)
 
@@ -200,8 +204,9 @@ def get_best_threshold(model, X, y, metric = f1_score, only_below_50 = True):
 	#return threshold[max_index], scores[max_index]
 	return threshold[max_index], scores[max_index]
 
-def optimize_for_threshold(model, X, y, cv=10, random_state = 42, verbose=1):
-	model_copy = clone(model) # Make a copy of the model
+def optimize_for_threshold(model, X, y, cv=10, random_state = 42, verbose=0):
+	model_copy = model
+	#model_copy = clone(model) # Make a copy of the model
 
 	kfolds = StratifiedKFold(n_splits=cv, random_state=random_state, shuffle=True)
 	try:
@@ -231,7 +236,115 @@ def optimize_for_threshold(model, X, y, cv=10, random_state = 42, verbose=1):
 
 
 
+class Ensemble(sklearn.base.BaseEstimator):
+	def __init__(self, models, ensemble_model, random_state = 342):
+		self._models = models
+		self._ensemble_model = ensemble_model
+		self._random_state = random_state
 
+	def fit(self, X_train, y_train, verbose=2, optimize=True, cv=4):
+		try:
+			X_train = X_train.values
+			y_train = y_train.values
+		except Exception:
+			pass
+
+		kfolds = StratifiedKFold(n_splits=cv, shuffle=True, random_state = self._random_state)
+		# Start fitting of other models
+
+		self._thresholds = []
+		other_predictions = np.zeros((X_train.shape[0], len(self._models)))
+		for i in range(len(self._models)):
+			if verbose >= 2:
+				print('Training model #{0}'.format(i))
+
+			for tr_idx, tst_idx in kfolds.split(X_train, y_train):
+				x_cv_tr, y_cv_tr = X_train[tr_idx], y_train[tr_idx]
+				x_cv_tst, y_cv_tst = X_train[tst_idx], y_train[tst_idx]
+
+				if optimize:
+					thr, _ = optimize_for_threshold(self._models[i], x_cv_tr, y_cv_tr, cv=3)
+					self._models[i] = self._models[i].fit(x_cv_tr, y_cv_tr)
+				else:
+					self._models[i] = self._models[i].fit(x_cv_tr, y_cv_tr)
+					thr, _ = get_best_threshold(self._models[i], x_cv_tr, y_cv_tr)
+
+				self._thresholds.append(thr)
+				
+
+				other_predictions[tst_idx, i] = predict_with_threshold(self._models[i], x_cv_tst, thr)
+
+
+		if verbose >= 2:
+			print('Others model fit finished')
+
+		# Start predictions of other models to be stacked in X_train
+		#other_predictions = []
+		#for i in range(len(self._models)):
+			#other_predictions.append(get_probabilities(self._models[i], X_train))
+		#	other_predictions.append(self._models[i].predict(X_train))
+		#other_predictions = np.array(other_predictions).T
+
+		# Append predictions to train set
+		X_final = np.concatenate([X_train, other_predictions], axis=1)
+		#X_final = other_predictions
+		# Train the ensemble on new train data
+		self._ensemble_model.fit(X_final, y_train)
+
+		return self
+
+	def predict(self, X_test):
+		try:
+			X_test = X_test.values
+		except Exception:
+			pass
+
+		# Start by predicting X_test from other models
+		other_predictions = []
+		for i in range(len(self._models)):
+			#other_predictions.append(get_probabilities(self._models[i], X_test))
+			#other_predictions.append(self._models[i].predict(X_test))
+			other_predictions.append(predict_with_threshold(self._models[i], X_test, self._thresholds[i]))
+		other_predictions = np.array(other_predictions).T
+
+		# Append predictions to train set
+		X_final = np.concatenate([X_test, other_predictions], axis=1)
+		#X_final = other_predictions
+
+		return self._ensemble_model.predict(X_final)
+
+	def predict_proba(self, X_test):
+		try:
+			X_test = X_test.values
+		except Exception:
+			pass
+
+		# Start by predicting X_test from other models
+		other_predictions = []
+		for i in range(len(self._models)):
+			#other_predictions.append(get_probabilities(self._models[i], X_test))
+			#other_predictions.append(self._models[i].predict(X_test))
+			other_predictions.append(predict_with_threshold(self._models[i], X_test, self._thresholds[i]))
+		other_predictions = np.array(other_predictions).T
+
+		# Append predictions to train set
+		X_final = np.concatenate([X_test, other_predictions], axis=1)
+		#X_final = other_predictions
+		return self._ensemble_model.predict_proba(X_final)
+
+	def get_params(self, deep=False):
+		return {'models' : [clone(m) for m in self._models],
+				'ensemble_model' : clone(self._ensemble_model)}
+
+	def set_params(self, **params):
+		self._models = params['models']
+		self._ensemble_model = params['ensemble_model']
+
+	def __repr__(self):
+		try:
+			return "Ensemble(" + ', '.join([str(m).split()[0] for m in self._models]) + ")"
+		except Exception:
+			return "Ensemble()"
 
 
 

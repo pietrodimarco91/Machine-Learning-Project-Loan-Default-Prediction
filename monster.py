@@ -1,13 +1,14 @@
 from __future__ import print_function
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score
+import utils
 from utils import ThresholdGridCV, get_best_threshold, predict_with_threshold
 import numpy as np
 import sys
 import pickle
 import pandas
 
-class Monster():
+class Kraken():
 	def __init__(self, classifiers, params, random_state = 42):
 		if len(classifiers) != len(params):
 			raise ValueError('classifiers and params must have the same length')
@@ -40,7 +41,7 @@ class Monster():
 
 		num_model = 0
 		for model, params in zip(self._classifiers, self._params):
-			grid = ThresholdGridCV(model, params, cv=cv, verbose = verbose, metric = metric)
+			grid = utils.ThresholdGridCV(model, params, cv=cv, verbose = verbose, metric = metric)
 
 			if verbose >= 1:
 				print('\n\n========== Starting grid search for {0} =========='.format(model))
@@ -57,7 +58,8 @@ class Monster():
 				sys.stdout.flush()
 
 			model_summary = {
-				'model' : best_model, 
+				'model' : best_model,
+				'threshold_used' : np.mean(thresholds),
 				'scores_cv' : val_scores,
 				'scores_tr' : tr_scores,
 				'thresholds' : thresholds,
@@ -82,11 +84,20 @@ class Monster():
 		best_overall['model'] = best_overall['model'].fit(X_train, y_train)
 
 		if test_holdout:
-			avg_thr = np.mean(best_overall['thresholds'])
+			avg_thr = best_overall['threshold_used']
 			final_score = metric(predict_with_threshold(best_overall['model'], X_test, avg_thr), y_test)
 			print('\nFinal performance on test: {0}'.format(final_score))
 
+		if verbose >= 2:
+			print("Re training on whole dataset")
+		self._best_overall = best_overall
+		self._best_overall['model'] = self._best_overall['model'].fit(X, y)
 
+	def predict(self, X):
+		if isinstance(X, pandas.core.series.Series) or isinstance(X, pandas.core.frame.DataFrame):
+			X = X.values
+
+		return utils.predict_with_threshold(self._best_overall['model'], X, self._best_overall['threshold_used'])
 
 
 
