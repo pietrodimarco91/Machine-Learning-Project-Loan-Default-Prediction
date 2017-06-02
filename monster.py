@@ -91,6 +91,10 @@ class Kraken():
 		if verbose >= 2:
 			print("Re training on whole dataset")
 		self._best_overall = best_overall
+
+		if verbose >= 2:
+			print ('Optimizing threshold...')
+		self._best_overall['threshold_used'], _ = utils.optimize_for_threshold(self._best_overall['model'], X, y)
 		self._best_overall['model'] = self._best_overall['model'].fit(X, y)
 
 	def predict(self, X):
