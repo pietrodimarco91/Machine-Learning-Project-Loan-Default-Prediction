@@ -99,11 +99,11 @@ class ThresholdGridCV():
 					print("Training fold #{0}".format(fold), end = '')
 					fold += 1
 
-				model = model.fit(X_train, y_train)
-
 				if optimize:
 					best_threshold, best_f1_train = optimize_for_threshold(model, X_train, y_train)
+					model = model.fit(X_train, y_train)
 				else:
+					model = model.fit(X_train, y_train)
 					best_threshold, best_f1_train = get_best_threshold(model, X_train, y_train)
 
 				predictions = (get_probabilities(model, X_test) >= best_threshold)*1
